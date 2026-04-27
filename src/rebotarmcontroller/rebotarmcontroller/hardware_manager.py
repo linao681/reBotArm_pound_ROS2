@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -30,6 +31,8 @@ class HardwareManager:
         gripper_cfg: Optional[str] = None,
         channel: str = "",
     ) -> None:
+        self._sdk_root = self._ensure_rebot_sdk_in_syspath()
+
         from reBotArm_control_py.actuator import RobotArm
         from reBotArm_control_py.controllers import ArmEndPos
 
@@ -62,28 +65,37 @@ class HardwareManager:
 
         self._patch_arm_bus_lock()
 
-    @staticmethod
-    def default_arm_cfg() -> Path:
-        return (
-            Path.home()
-            / "seeed"
-            / "cameraws"
-            / "sdk"
-            / "reBotArm_control_py"
-            / "config"
-            / "arm.yaml"
-        )
+    def default_arm_cfg(self) -> Path:
+        return self._sdk_root / "config" / "arm.yaml"
+
+    def default_gripper_cfg(self) -> Path:
+        return self._sdk_root / "config" / "gripper.yaml"
 
     @staticmethod
-    def default_gripper_cfg() -> Path:
-        return (
-            Path.home()
-            / "seeed"
-            / "cameraws"
-            / "sdk"
-            / "reBotArm_control_py"
-            / "config"
-            / "gripper.yaml"
+    def _workspace_root() -> Path:
+        return Path(__file__).resolve().parents[3]
+
+    @classmethod
+    def _sdk_candidates(cls) -> list[Path]:
+        workspace = cls._workspace_root()
+        return [
+            workspace / "third_party" / "reBotArm_control_py",
+            workspace / "sdk" / "reBotArm_control_py",
+            Path.home() / "seeed" / "cameraws" / "sdk" / "reBotArm_control_py",
+        ]
+
+    @classmethod
+    def _ensure_rebot_sdk_in_syspath(cls) -> Path:
+        for root in cls._sdk_candidates():
+            if (root / "reBotArm_control_py").is_dir():
+                root_str = str(root)
+                if root_str not in sys.path:
+                    sys.path.insert(0, root_str)
+                return root
+        candidates = "\n".join(f"  - {path}" for path in cls._sdk_candidates())
+        raise FileNotFoundError(
+            "Cannot find reBotArm_control_py. Clone it into one of:\n"
+            f"{candidates}"
         )
 
     @staticmethod

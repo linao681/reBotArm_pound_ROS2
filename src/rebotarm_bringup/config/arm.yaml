@@ -4,7 +4,7 @@
 channel: /dev/ttyACM0
 
 # 控制循环频率 (Hz)
-rate: 500
+rate: 100
 
 joints:
   # joint1:
