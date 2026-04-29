@@ -43,7 +43,8 @@ class MotorPassthrough:
                 self._node.get_logger().warn(
                     f"preempting trajectory for /joints/{joint_name}/cmd"
                 )
-                self._hardware.cancel_motion()
+                self._hardware.endpos_ctrl._stop_send.set()
+                self._hardware.endpos_ctrl._moving = False
 
             try:
                 self._hardware.send_joint_motor_cmd(joint_name, msg)

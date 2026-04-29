@@ -6,5 +6,5 @@ __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
-PLAN.md
+info
 third_party/

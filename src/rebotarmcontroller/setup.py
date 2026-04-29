@@ -1,4 +1,3 @@
-from glob import glob
 from setuptools import find_packages, setup
 
 package_name = "rebotarmcontroller"
@@ -10,7 +9,6 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),
-        (f"share/{package_name}/examples", glob("examples/*.py")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -21,6 +19,10 @@ setup(
     entry_points={
         "console_scripts": [
             "reBotArmController = rebotarmcontroller.rebotarm_controller:main",
+            "GravityCompensation = rebotarmcontroller.examples.gravity_compensation:main",
+            "GripperControl = rebotarmcontroller.examples.gripper_control:main",
+            "MoveTo = rebotarmcontroller.examples.move_to:main",
+            "MoveToPose = rebotarmcontroller.examples.move_to_pose:main",
         ],
     },
 )

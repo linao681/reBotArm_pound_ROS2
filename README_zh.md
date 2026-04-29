@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/ROS2-Jazzy-blue.svg" alt="ROS2 Jazzy">
   <img src="https://img.shields.io/badge/Python-3.12-blue.svg" alt="Python 3.12">
-  <img src="https://img.shields.io/badge/Version-v0.0.2-brightgreen.svg" alt="Version v0.0.2">
+  <img src="https://img.shields.io/badge/Version-v0.0.5-brightgreen.svg" alt="Version v0.0.5">
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2024.04+-orange.svg" alt="Ubuntu 24.04+">
   <img src="https://img.shields.io/badge/Controller-reBotArmController-green.svg" alt="reBotArmController">
 </p>
@@ -16,7 +16,7 @@
 
 ## 项目介绍
 
-当前版本：`v0.0.2`
+当前版本：`v0.0.5`
 
 `rebotarm_ros2` 是 reBotArm B601 机械臂的 ROS2 SDK 工作空间。它将现有的
 `reBotArm_control_py` Python 控制库封装为 ROS2 topic、service 和 action，
@@ -39,8 +39,9 @@
 - 支持笛卡尔目标：`MoveToPoseIK` service、`MoveToPose` action
 - 支持标准轨迹接口：`control_msgs/action/FollowJointTrajectory`
 - 支持夹爪控制：`SetGripper` service、`GripperCommand` action
+- 支持 controller 内部重力补偿：`gravity_compensation/start`、`gravity_compensation/stop`
 - 支持 per-joint sparse raw command：`JointMotorCmd`
-- 复用 `reBotArm_control_py` 的 `RobotArm`、`ArmEndPos`、FK/IK 和夹爪配置加载
+- 复用 `reBotArm_control_py` 的 `RobotArm`、`ArmEndPos`、FK/IK、动力学和夹爪配置加载
 
 ---
 
@@ -63,56 +64,27 @@ source /opt/ros/jazzy/setup.bash
 
 ---
 
-## 安装依赖
+## 配置开发环境
 
 ### Step 1. 安装 ROS2 依赖
 
-```bash
-sudo apt install -y \
-  ros-jazzy-pinocchio \
-  ros-jazzy-control-msgs \
-  ros-jazzy-robot-state-publisher \
-  ros-jazzy-rviz2 \
-  ros-jazzy-tf-transformations
-```
+请参考[ROS官方下载文档](https://www.ros.org/blog/getting-started/)选择适合的版本进行安装。
 
 ### Step 2. 安装 motorbridge
 
-`motorbridge` 必须从 PyPI 官方源安装，不要使用清华镜像：
+`motorbridge` 从 PyPI 官方源安装：
 
 ```bash
 python3 -m pip install --user --index-url https://pypi.org/simple motorbridge
 ```
 
-如果 Ubuntu 24.04 报 `externally-managed-environment`，使用：
-
-```bash
-python3 -m pip install --user --break-system-packages \
-  --index-url https://pypi.org/simple motorbridge
-```
-
 ### Step 3. 获取底层 SDK
 
-推荐把 `reBotArm_control_py` 放在 workspace 根目录的 `third_party/` 下，而不是
-放进 `src/`。`src/` 只放 ROS2 包，第三方非 ROS Python SDK 放在 `third_party/`
-更容易管理，也不会被 colcon 当作 ROS 包扫描。
 
 ```bash
 cd ~/seeed/rebotarm_ros2
 mkdir -p third_party
 git clone https://github.com/vectorBH6/reBotArm_control_py.git third_party/reBotArm_control_py
-```
-
-`reBotArmController` 运行时会自动优先加载：
-
-```text
-~/seeed/rebotarm_ros2/third_party/reBotArm_control_py
-```
-
-如果该目录不存在，才 fallback 到开发环境中的：
-
-```text
-~/seeed/cameraws/sdk/reBotArm_control_py
 ```
 
 ### Step 4. 确认底层 SDK 可导入
@@ -126,8 +98,6 @@ python3 -c "import rclpy, motorbridge, reBotArm_control_py; print('core imports 
 python3 -c "import pinocchio; print('pinocchio', pinocchio.__version__)"
 python3 -c "from reBotArm_control_py.actuator import RobotArm; from reBotArm_control_py.controllers import ArmEndPos; from reBotArm_control_py.kinematics import compute_fk; from reBotArm_control_py.kinematics.inverse_kinematics import solve_ik; from reBotArm_control_py.actuator.gripper import load_cfg; print('SDK required APIs OK')"
 ```
-
----
 
 ## 构建工作空间
 
@@ -148,6 +118,41 @@ ros2 pkg executables rebotarmcontroller
 
 ```text
 rebotarmcontroller reBotArmController
+rebotarmcontroller GravityCompensation
+rebotarmcontroller GripperControl
+rebotarmcontroller MoveTo
+rebotarmcontroller MoveToPose
+```
+
+---
+
+## 目录结构
+
+```text
+rebotarm_ros2/
+├── README_zh.md
+├── PLAN.md
+├── instruction.md
+└── src/
+    ├── rebotarm_msgs/
+    │   ├── msg/
+    │   ├── srv/
+    │   └── action/
+    ├── rebotarmcontroller/
+    │   ├── rebotarmcontroller/
+    │   │   ├── rebotarm_controller.py
+    │   │   ├── hardware_manager.py
+    │   │   ├── ros_publishers.py
+    │   │   ├── ros_services.py
+    │   │   ├── ros_actions.py
+    │   │   ├── motor_passthrough.py
+    │   │   ├── conversions.py
+    │   │   └── examples/
+    └── rebotarm_bringup/
+        ├── launch/
+        ├── config/
+        ├── description/
+        └── rviz/
 ```
 
 ---
@@ -188,56 +193,203 @@ ros2 run rebotarmcontroller reBotArmController
 
 ---
 
-## 目录结构
+## 直接移动到 Pose
 
-```text
-rebotarm_ros2/
-├── README_zh.md
-├── PLAN.md
-├── instruction.md
-└── src/
-    ├── rebotarm_msgs/
-    │   ├── msg/
-    │   ├── srv/
-    │   └── action/
-    ├── rebotarmcontroller/
-    │   ├── rebotarmcontroller/
-    │   │   ├── rebotarm_controller.py
-    │   │   ├── hardware_manager.py
-    │   │   ├── ros_publishers.py
-    │   │   ├── ros_services.py
-    │   │   ├── ros_actions.py
-    │   │   ├── motor_passthrough.py
-    │   │   └── conversions.py
-    │   └── examples/
-    └── rebotarm_bringup/
-        ├── launch/
-        ├── config/
-        ├── description/
-        └── rviz/
+不运行 demo 时，可以直接调用 ROS service 和 action 完成一次末端位姿移动。
+先在一个终端启动控制节点：
+
+```bash
+cd ~/seeed/rebotarm_ros2
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch rebotarm_bringup bringup.launch.py channel:=/dev/ttyACM0
+```
+
+然后在另一个终端执行控制命令：
+
+```bash
+cd ~/seeed/rebotarm_ros2
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+```
+
+1. 使能机械臂：
+
+```bash
+ros2 service call /rebotarm/enable std_srvs/srv/Trigger
+```
+
+2. 移动末端到目标 pose：
+
+```bash
+ros2 action send_goal /rebotarm/move_to_pose rebotarm_msgs/action/MoveToPose \
+  "{target_pose: {position: {x: 0.30, y: 0.0, z: 0.30}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}, duration: 2.0}" \
+  --feedback
+```
+
+`move_to_pose` action 内部会确保进入 `pos_vel` 控制并启动轨迹控制循环。
+
+3. 回到安全零位：
+
+```bash
+ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger
+```
+
+4. 失能并退出：
+
+```bash
+ros2 service call /rebotarm/disable std_srvs/srv/Trigger
 ```
 
 ---
 
-## 常用接口
+## 示例脚本
 
-### 状态查看
+所有示例都假设已经启动 `reBotArmController`：
 
 ```bash
-ros2 topic echo /rebotarm/arm_status --once
-ros2 topic hz /rebotarm/joint_states
+cd ~/seeed/rebotarm_ros2
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch rebotarm_bringup bringup.launch.py channel:=/dev/ttyACM0
 ```
 
-### 基础服务
+示例已注册为 ROS2 可执行入口，可以直接通过 `ros2 run` 调用。
+
+源文件位于：
+
+```text
+src/rebotarmcontroller/rebotarmcontroller/examples/move_to.py
+src/rebotarmcontroller/rebotarmcontroller/examples/move_to_pose.py
+src/rebotarmcontroller/rebotarmcontroller/examples/gravity_compensation.py
+src/rebotarmcontroller/rebotarmcontroller/examples/gripper_control.py
+```
+
+### move_to.py
+
+关节空间绝对角移动示例。脚本会等待 `/rebotarm/joint_states`，然后通过
+`/rebotarm/follow_joint_trajectory` 发送关节轨迹；控制节点会在 action 内部进入
+`pos_vel`，并使用限速和最终到位检查。
+
+这是单次动作 demo，不会在结束后自动 `safe_home` 或 `disable`。
+
+一次性控制 6 个电机，参数为 6 个绝对关节角，单位 rad：
+
+```bash
+ros2 run rebotarmcontroller MoveTo -- \
+  0.20 -0.20 -0.20 -0.20 0.10 -0.10 \
+  --duration 8.0
+```
+
+一次性控制 1 个电机，参数为目标关节名和绝对关节角，单位 rad：
+
+```bash
+ros2 run rebotarmcontroller MoveTo -- --joint joint3 --position -0.20 --duration 5.0
+```
+
+这个入口只作为 joint trajectory 链路验证，不建议用它做大范围规划。轨迹仍需满足
+`follow_joint_trajectory` 的首点、速度和最终到位校验。
+
+### move_to_pose.py
+
+末端位姿移动示例。脚本会通过 `/rebotarm/move_to_pose` action 发送
+`geometry_msgs/Pose` 目标；控制节点内部负责模式切换和轨迹执行。
+
+这是单次动作 demo，不会在结束后自动 `safe_home` 或 `disable`。
+
+```bash
+ros2 run rebotarmcontroller MoveToPose -- --x 0.30 --y 0.0 --z 0.30 --qw 1.0 --duration 2.0
+```
+
+这个示例对应底层 SDK 的 `ArmEndPos.move_to_traj(...)` 能力链路，也就是
+`third_party/reBotArm_control_py/example/8_arm_traj_control.py` 的 ROS action 版本。
+
+### gravity_compensation.py
+
+重力补偿锁止示例。脚本本身不再在外部节点重写控制循环，而是直接调用
+`reBotArmController` 内部的重力补偿服务；真正的重力补偿闭环在 controller
+进程内部直接使用 SDK 的 `RobotArm.get_positions/get_velocities/mit` 完成。
+内部启动流程参考新版 SDK 示例：切入 MIT 后先执行 `fresh()` 空指令，再进入重力补偿闭环，
+并对多圈角度反馈做就近连续化处理，避免启动瞬态弹跳。
+
+```bash
+ros2 run rebotarmcontroller GravityCompensation
+```
+
+脚本启动时会先调用 `/rebotarm/enable`，再启动重力补偿。按 `Ctrl+C` 退出时，
+脚本会依次调用 `/rebotarm/safe_home` 和 `/rebotarm/disable`，让机械臂回到安全零位后失能。
+
+对应底层服务：
 
 ```bash
 ros2 service call /rebotarm/enable std_srvs/srv/Trigger
-ros2 service call /rebotarm/disable std_srvs/srv/Trigger
+ros2 service call /rebotarm/gravity_compensation/start std_srvs/srv/Trigger
+ros2 service call /rebotarm/gravity_compensation/stop std_srvs/srv/Trigger
 ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger
-ros2 service call /rebotarm/set_mode rebotarm_msgs/srv/SetMode "{mode: 'pos_vel'}"
+ros2 service call /rebotarm/disable std_srvs/srv/Trigger
 ```
 
-### 移动到笛卡尔位姿
+该示例只是这些服务的薄客户端，不会绕过 ROS 节点直接连接硬件。硬件访问仍由
+`reBotArmController` 统一持有。
+
+### gripper_control.py
+
+交互式夹爪开闭示例。脚本只调用 `/rebotarm/gripper/set` service，不直接访问硬件。
+脚本启动时会先调用 `/rebotarm/enable`，退出时先闭合夹爪，再调用 `/rebotarm/disable`。
+
+```bash
+ros2 run rebotarmcontroller GripperControl
+```
+
+运行后输入：
+
+```text
+o / open    打开夹爪
+c / close   闭合夹爪
+q / quit    退出
+```
+
+`open` 对应夹爪开口 `0.09 m`，`close` 对应 `0.0 m`。
+
+---
+
+## ROS API 速查
+
+默认命名空间为 `/rebotarm`。如果 launch 时设置了 `arm_namespace:=xxx`，下面所有
+`/rebotarm/...` 都替换为 `/xxx/...`。
+
+### 状态 Topic
+
+| API | 类型 | 说明 | 简要使用 |
+|---|---|---|---|
+| `/rebotarm/joint_states` | `sensor_msgs/msg/JointState` | 6 轴关节位置、速度、力矩 | `ros2 topic echo /rebotarm/joint_states --once` |
+| `/rebotarm/arm_status` | `rebotarm_msgs/msg/ArmStatus` | 控制模式、使能状态、状态机、关节状态码 | `ros2 topic echo /rebotarm/arm_status --once` |
+| `/rebotarm/joints/<joint>/state` | `rebotarm_msgs/msg/JointMotorState` | 单关节电机状态，`<joint>` 为 `joint1` 到 `joint6` | `ros2 topic echo /rebotarm/joints/joint1/state --once` |
+| `/rebotarm/gripper/state` | `rebotarm_msgs/msg/JointMotorState` | 夹爪状态，未配置夹爪时不发布 | `ros2 topic echo /rebotarm/gripper/state --once` |
+
+### 服务 Service
+
+| API | 类型 | 说明 | 简要使用 |
+|---|---|---|---|
+| `/rebotarm/enable` | `std_srvs/srv/Trigger` | 使能机械臂和夹爪 | `ros2 service call /rebotarm/enable std_srvs/srv/Trigger` |
+| `/rebotarm/disable` | `std_srvs/srv/Trigger` | 停止控制循环并失能机械臂 | `ros2 service call /rebotarm/disable std_srvs/srv/Trigger` |
+| `/rebotarm/safe_home` | `std_srvs/srv/Trigger` | 以安全速度回零 | `ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger` |
+| `/rebotarm/gravity_compensation/start` | `std_srvs/srv/Trigger` | 启动 controller 内部重力补偿闭环 | `ros2 service call /rebotarm/gravity_compensation/start std_srvs/srv/Trigger` |
+| `/rebotarm/gravity_compensation/stop` | `std_srvs/srv/Trigger` | 停止 controller 内部重力补偿闭环 | `ros2 service call /rebotarm/gravity_compensation/stop std_srvs/srv/Trigger` |
+| `/rebotarm/set_mode` | `rebotarm_msgs/srv/SetMode` | 切换 `mit`、`pos_vel`、`vel` | `ros2 service call /rebotarm/set_mode rebotarm_msgs/srv/SetMode "{mode: 'pos_vel'}"` |
+| `/rebotarm/set_zero` | `rebotarm_msgs/srv/SetZero` | 设置全部或指定关节零点，空 `joint_name` 表示全部 | `ros2 service call /rebotarm/set_zero rebotarm_msgs/srv/SetZero "{joint_name: ''}"` |
+| `/rebotarm/move_to_pose_ik` | `rebotarm_msgs/srv/MoveToPoseIK` | 只做 IK 求解并更新目标关节角，适合小步位姿调整 | 见下方预留 API |
+| `/rebotarm/gripper/set` | `rebotarm_msgs/srv/SetGripper` | 设置夹爪开合距离和最大力矩 | `ros2 service call /rebotarm/gripper/set rebotarm_msgs/srv/SetGripper "{position: 0.05, max_effort: 0.5}"` |
+
+### 动作 Action
+
+| API | 类型 | 说明 | 简要使用 |
+|---|---|---|---|
+| `/rebotarm/move_to_pose` | `rebotarm_msgs/action/MoveToPose` | 末端笛卡尔位姿轨迹，内部走 `ArmEndPos.move_to_traj(...)` | 适合应用层发 `Pose + duration` |
+| `/rebotarm/follow_joint_trajectory` | `control_msgs/action/FollowJointTrajectory` | 标准关节轨迹接口，按输入轨迹点定时下发，并做首点/速度/到位校验 | 适合上层规划器或 `move_to.py` |
+| `/rebotarm/gripper/command` | `control_msgs/action/GripperCommand` | 标准夹爪 action | 适合行为树、任务编排或 MoveIt 风格接口 |
+
+示例：
 
 ```bash
 ros2 action send_goal /rebotarm/move_to_pose rebotarm_msgs/action/MoveToPose \
@@ -245,32 +397,56 @@ ros2 action send_goal /rebotarm/move_to_pose rebotarm_msgs/action/MoveToPose \
   --feedback
 ```
 
-### FollowJointTrajectory
-
 ```bash
 ros2 action send_goal /rebotarm/follow_joint_trajectory \
   control_msgs/action/FollowJointTrajectory \
   "{trajectory: {joint_names: ['joint1','joint2','joint3','joint4','joint5','joint6'],
     points: [{positions: [0,0,0,0,0,0], time_from_start: {sec: 2}},
-             {positions: [0.3,0,0,0,0,0], time_from_start: {sec: 4}}]}}"
+             {positions: [0.1,0,0,0,0,0], time_from_start: {sec: 5}}]}}"
 ```
 
-### 夹爪控制
+`follow_joint_trajectory` 要求首个轨迹点接近当前关节角，最终误差默认需小于
+`0.03 rad`。底层 `pos_vel` 速度限制使用 `arm.yaml` 中的电机配置。
 
-```bash
-ros2 service call /rebotarm/gripper/set rebotarm_msgs/srv/SetGripper \
-  "{position: 0.05, max_effort: 0.5}"
+### 低层 Command Topic
 
-ros2 action send_goal /rebotarm/gripper/command control_msgs/action/GripperCommand \
-  "{command: {position: 0.0, max_effort: 1.0}}"
-```
+| API | 类型 | 说明 | 简要使用 |
+|---|---|---|---|
+| `/rebotarm/joints/<joint>/cmd` | `rebotarm_msgs/msg/JointMotorCmd` | 单关节 sparse raw command，可发 MIT、位置速度、速度模式 | 调试、电机直通、重力补偿 |
+| `/rebotarm/gripper/cmd` | `rebotarm_msgs/msg/JointMotorCmd` | 夹爪 sparse raw command | 低层夹爪调试 |
 
-### 单关节 raw passthrough
+`JointMotorCmd` 使用 sparse-flag 设计：只有 `use_pos/use_vel/use_kp/use_kd/use_tau/use_vlim`
+为 `true` 的字段才覆盖默认值。`mode` 可选：
+
+| mode | 常量 | 说明 |
+|---|---|---|
+| `0` | `MODE_MIT` | MIT 模式，使用 `pos/vel/kp/kd/tau` |
+| `1` | `MODE_POS_VEL` | 位置速度模式，使用 `pos/vlim` |
+| `2` | `MODE_VEL` | 速度模式，使用 `vel` |
+
+单关节 MIT 示例：
 
 ```bash
 ros2 topic pub --once /rebotarm/joints/joint1/cmd rebotarm_msgs/msg/JointMotorCmd \
   "{mode: 0, use_pos: true, use_kp: true, use_kd: true, pos: 0.0, kp: 80.0, kd: 4.0}"
 ```
+
+---
+
+## 预留 API 与上层集成入口
+
+这些接口已经在节点中注册，建议作为后续上层应用、规划器或调试工具的稳定接入点。
+
+| 入口 | 当前用途 | 预留方向 | 使用说明 |
+|---|---|---|---|
+| `/rebotarm/follow_joint_trajectory` | 关节轨迹 action | MoveIt2、任务规划器、离线轨迹回放 | 发送完整 `joint_names` 和 `points`，首点需接近当前关节角 |
+| `/rebotarm/move_to_pose` | 末端位姿 action | 视觉抓取、点击到达、任务级 API | 输入 `Pose + duration`，返回 `final_pose` 和执行结果 |
+| `/rebotarm/move_to_pose_ik` | IK 服务 | IK 预检查、小步 servo、UI 预览 | 服务返回 `q_solution`，适合先验证目标是否可达 |
+| `/rebotarm/joints/<joint>/cmd` | 单电机直通 topic | 调参、重力补偿、低层控制实验 | 轨迹运行时默认 `reject`，可用参数 `cmd_arbitration:=preempt` 改为抢占 |
+| `/rebotarm/gripper/command` | 标准夹爪 action | 行为树、抓取 pipeline | 使用 `control_msgs/action/GripperCommand`，位置单位为米 |
+| `/rebotarm/arm_status` | latched 状态 topic | UI、健康监控、状态机同步 | 关注 `state_machine`：`IDLE`、`TRAJ_RUNNING`、`LOWLEVEL_STREAMING`、`GRAVITY_COMP` |
+| `arm_namespace` 参数 | 命名空间 | 多臂或仿真/真机并行 | launch 时传 `arm_namespace:=left_arm` |
+| `frame_id`、`ee_frame_id` 参数 | 坐标帧标识 | 后续 TF、MoveIt2、视觉坐标对齐 | 默认 `base_link`、`end_link` |
 
 ---
 
@@ -294,24 +470,9 @@ ros2 topic pub --once /rebotarm/joints/joint1/cmd rebotarm_msgs/msg/JointMotorCm
 | `joint_state_rate` | `100.0` | `/rebotarm/joint_states` 发布频率 |
 | `cmd_arbitration` | `reject` | 轨迹运行中 per-joint cmd 仲裁，`reject` 或 `preempt` |
 | `arm_namespace` | `rebotarm` | ROS 命名空间前缀 |
+| `frame_id` | `base_link` | 机械臂基座坐标系，预留给 TF、视觉和规划集成 |
+| `ee_frame_id` | `end_link` | 末端坐标系，预留给 TF、视觉和规划集成 |
 | `use_rviz` | `false` | 是否启动 RViz |
-
----
-
-## 示例脚本
-
-示例脚本安装在 `rebotarmcontroller` 包的 share 目录：
-
-```bash
-ros2 pkg prefix rebotarmcontroller
-```
-
-源文件位于：
-
-```text
-src/rebotarmcontroller/examples/demo_move_to_pose.py
-src/rebotarmcontroller/examples/demo_joint_passthrough.py
-```
 
 ---
 
@@ -355,10 +516,33 @@ sudo usermod -a -G dialout $USER
 package://rebotarm_bringup/description/meshes/...
 ```
 
+### FastDDS SHM 端口提示
+
+如果终端出现类似：
+
+```text
+[RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7002: open_and_lock_file failed
+```
+
+通常是之前的 ROS2 进程异常退出后，FastDDS shared memory 锁文件残留。服务和 action
+能正常响应时，这个提示一般不影响控制。需要清理时，先停掉相关 ROS2 进程，再执行：
+
+```bash
+pkill -f ros2
+pkill -f reBotArmController
+rm -f /dev/shm/fastrtps_port*
+```
+
+如果希望临时绕开 shared memory transport，可在启动 ROS2 前设置：
+
+```bash
+export FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+```
+
 ---
 
 ## 已知状态
 
-当前开发环境未接真机时，`reBotArmController` 会在硬件初始化阶段因为
-`/dev/ttyACM0` 不存在而退出。接入真机并传入正确 `channel` 后，再运行完整
-topic、service 和 action 端到端验证。
+`reBotArmController` 启动时会直接连接真实硬件；如果默认 `/dev/ttyACM0` 不存在，
+需要通过 `channel:=/dev/ttyACM*` 指定正确串口。当前示例入口均通过 ROS2
+service/action/topic 访问 controller，不会绕过 controller 直接占用硬件。

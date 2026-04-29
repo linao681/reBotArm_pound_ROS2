@@ -9,7 +9,7 @@ from typing import Optional
 import numpy as np
 import yaml
 
-from .conversions import fk_to_pose, pose_to_xyz_rpy
+from .conversions import fk_to_pose
 
 _G_MAX_DIST_M = 0.09
 _G_ANGLE_OPEN = -5.0
@@ -20,6 +20,11 @@ _G_KP_MOVE = 5.0
 _G_KD_MOVE = 1.0
 _G_DEFAULT_FORCE = 0.30
 _G_CTRL_RATE = 500.0
+_GC_VEL_THRESHOLD = 0.04
+_GC_W_VEL_THRESHOLD = 0.08
+_GC_EE_FRAME = "end_link"
+_GC_KP = 7.0
+_GC_KD = 0.8
 
 
 class HardwareManager:
@@ -35,10 +40,18 @@ class HardwareManager:
 
         from reBotArm_control_py.actuator import RobotArm
         from reBotArm_control_py.controllers import ArmEndPos
+        from reBotArm_control_py.kinematics import load_robot_model
+        from reBotArm_control_py.dynamics import compute_generalized_gravity
+        import pinocchio as pin
 
         cfg_path = Path(arm_cfg).expanduser() if arm_cfg else self.default_arm_cfg()
         cfg_path = self._arm_cfg_with_channel(cfg_path, channel)
         self._arm = RobotArm(cfg_path=str(cfg_path))
+        self._gc_model = load_robot_model()
+        self._gc_data = self._gc_model.createData()
+        self._gc_ee_frame_id = self._gc_model.getFrameId(_GC_EE_FRAME)
+        self._gc_compute_generalized_gravity = compute_generalized_gravity
+        self._gc_pin = pin
 
         self._gripper_cfg_path = (
             Path(gripper_cfg).expanduser() if gripper_cfg else self.default_gripper_cfg()
@@ -62,6 +75,11 @@ class HardwareManager:
         self._enabled = False
         self._state_machine = "IDLE"
         self._error_codes: list[str] = []
+        self._gravity_comp_active = False
+        self._gravity_comp_q_target: np.ndarray | None = None
+        self._gravity_comp_integral: np.ndarray | None = None
+        self._gravity_comp_lock_counter = 0
+        self._gravity_comp_q_last: np.ndarray | None = None
 
         self._patch_arm_bus_lock()
 
@@ -149,16 +167,19 @@ class HardwareManager:
         return list(self._error_codes)
 
     def set_state_machine(self, state: str) -> None:
-        if state not in ("IDLE", "TRAJ_RUNNING", "LOWLEVEL_STREAMING"):
+        if state not in ("IDLE", "TRAJ_RUNNING", "LOWLEVEL_STREAMING", "GRAVITY_COMP"):
             raise ValueError(f"unsupported state machine value: {state}")
         self._state_machine = state
 
     def connect(self) -> None:
         if self._connected:
             return
-        self._endpos_ctrl.start()
-        self._connected = True
+        self._arm.connect()
+        self._arm.mode_pos_vel()
+        self._arm.enable()
         self._enabled = True
+        self._start_pos_vel_loop()
+        self._connected = True
         self.init_gripper(str(self._gripper_cfg_path))
 
     def shutdown(self) -> None:
@@ -166,13 +187,26 @@ class HardwareManager:
             return
         try:
             self._stop_gripper_loop()
-            self._endpos_ctrl.end()
+            gravity_comp_active = self._gravity_comp_active
+            self.stop_gravity_compensation()
+            if gravity_comp_active:
+                self.ensure_pos_vel_control()
+            if self._endpos_ctrl._running:
+                self._endpos_ctrl.end()
+            else:
+                self._arm.disconnect()
         finally:
             self._connected = False
             self._enabled = False
 
     def get_joint_state(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self._arm.get_state()
+
+    def hold_current_position(self) -> np.ndarray:
+        q, _, _ = self.get_joint_state()
+        current = np.array(q, dtype=np.float64, copy=True)
+        self._endpos_ctrl._q_target[:] = current
+        return current
 
     def enable(self) -> None:
         from motorbridge import Mode
@@ -186,6 +220,7 @@ class HardwareManager:
         self.set_state_machine("IDLE")
 
     def disable(self) -> None:
+        self.stop_gravity_compensation()
         self._stop_control_loop()
         self._arm.disable()
         self._enabled = False
@@ -195,6 +230,16 @@ class HardwareManager:
         mode = mode.strip().lower()
         if mode not in ("mit", "pos_vel", "vel"):
             raise ValueError(f"unsupported mode: {mode}")
+        self.stop_gravity_compensation()
+
+        if mode == self.mode:
+            if mode == "pos_vel" and self._enabled:
+                if self.control_loop_active:
+                    self.hold_current_position()
+                else:
+                    self._start_pos_vel_loop()
+            self.set_state_machine("IDLE")
+            return True
 
         self._stop_control_loop()
         if mode == "mit":
@@ -219,10 +264,6 @@ class HardwareManager:
         self.set_state_machine("IDLE")
         return bool(ok)
 
-    def safe_home(self) -> None:
-        self.ensure_pos_vel_control()
-        self._endpos_ctrl.safe_home()
-
     def ensure_pos_vel_control(self) -> None:
         if self.mode != "pos_vel":
             self._stop_control_loop()
@@ -232,26 +273,8 @@ class HardwareManager:
             self._enabled = True
         if not self.control_loop_active:
             self._start_pos_vel_loop()
-
-    def move_to_pose_ik(self, pose) -> tuple[bool, np.ndarray]:
-        self.ensure_pos_vel_control()
-        x, y, z, roll, pitch, yaw = pose_to_xyz_rpy(pose)
-        ok = self._endpos_ctrl.move_to_ik(x, y, z, roll, pitch, yaw)
-        return bool(ok), self._endpos_ctrl._q_target.copy()
-
-    def move_to_pose_traj(self, pose, duration: float) -> bool:
-        self.ensure_pos_vel_control()
-        x, y, z, roll, pitch, yaw = pose_to_xyz_rpy(pose)
-        return bool(self._endpos_ctrl.move_to_traj(x, y, z, roll, pitch, yaw, duration))
-
-    def set_joint_target(self, joint_names: list[str], positions: list[float]) -> None:
-        if set(joint_names) != set(self.joint_names):
-            raise ValueError(f"trajectory joints must match {self.joint_names}")
-        ordered = np.zeros(len(self.joint_names), dtype=np.float64)
-        by_name = {name: float(pos) for name, pos in zip(joint_names, positions)}
-        for i, name in enumerate(self.joint_names):
-            ordered[i] = by_name[name]
-        self._endpos_ctrl._q_target[:] = ordered
+        else:
+            self.hold_current_position()
 
     def send_joint_motor_cmd(self, joint_name: str, cmd) -> None:
         if joint_name not in self._arm._motor_map:
@@ -280,26 +303,122 @@ class HardwareManager:
             raise ValueError(f"unsupported JointMotorCmd mode: {cmd.mode}")
         self.set_state_machine("LOWLEVEL_STREAMING")
 
+    def start_gravity_compensation(self) -> None:
+        self.stop_gravity_compensation()
+        if not self._enabled:
+            self._arm.enable()
+            self._enabled = True
+        self._stop_control_loop()
+        self._endpos_ctrl._stop_send.set()
+        self._endpos_ctrl._moving = False
+        self._gravity_comp_q_target = self._arm.get_positions(request=True).copy()
+        self._gravity_comp_q_last = self._gravity_comp_q_target.copy()
+        self._arm.mode_mit(
+            kp=np.full(self._arm.num_joints, _GC_KP, dtype=np.float64),
+            kd=np.full(self._arm.num_joints, _GC_KD, dtype=np.float64),
+        )
+        self._arm.fresh()
+        self._gravity_comp_integral = np.zeros_like(self._gravity_comp_q_target)
+        self._gravity_comp_lock_counter = 0
+        self._gravity_comp_active = True
+        self._gravity_comp_tick(self._arm, 1.0 / float(self._arm._rate))
+        self._arm.start_control_loop(self._gravity_comp_tick, rate=self._arm._rate)
+        self.set_state_machine("GRAVITY_COMP")
+
+    def stop_gravity_compensation(self) -> None:
+        if not self._gravity_comp_active:
+            return
+        hold_target = (
+            self._gravity_comp_q_last.copy()
+            if self._gravity_comp_q_last is not None
+            else None
+        )
+        self._arm.stop_control_loop()
+        self._gravity_comp_active = False
+        self._gravity_comp_q_target = None
+        self._gravity_comp_integral = None
+        self._gravity_comp_lock_counter = 0
+        self._gravity_comp_q_last = None
+        if self._enabled:
+            self._arm.mode_pos_vel()
+            self._start_pos_vel_loop(target=hold_target)
+        self.set_state_machine("IDLE")
+
+    def gravity_compensation_active(self) -> bool:
+        return self._gravity_comp_active
+
+    def gravity_compensation_target(self) -> np.ndarray | None:
+        if self._gravity_comp_q_target is None:
+            return None
+        return self._gravity_comp_q_target.copy()
+
+    @staticmethod
+    def _angles_near_reference(values: np.ndarray, reference: np.ndarray) -> np.ndarray:
+        delta = values - reference
+        delta = (delta + np.pi) % (2.0 * np.pi) - np.pi
+        return reference + delta
+
+    def _read_gravity_comp_positions(
+        self,
+        *,
+        request: bool = False,
+        reference: np.ndarray | None = None,
+    ) -> np.ndarray:
+        q = self._arm.get_positions(request=request)
+        ref = reference if reference is not None else self._gravity_comp_q_last
+        if ref is not None:
+            q = self._angles_near_reference(q, ref)
+        self._gravity_comp_q_last = np.array(q, dtype=np.float64, copy=True)
+        return self._gravity_comp_q_last.copy()
+
+    def _gravity_comp_tick(self, arm, dt: float) -> None:
+        del dt
+        if not self._gravity_comp_active or self._gravity_comp_q_target is None:
+            return
+
+        q = self._read_gravity_comp_positions()
+        qd = arm.get_velocities()
+        tau_g = self._gc_compute_generalized_gravity(q=q)
+
+        q_error = self._gravity_comp_q_target - q
+        if self._gravity_comp_integral is None:
+            self._gravity_comp_integral = np.zeros_like(q)
+        self._gravity_comp_integral += q_error * 1.0
+        np.clip(self._gravity_comp_integral, -0.5, 0.5, out=self._gravity_comp_integral)
+
+        self._gc_pin.computeJointJacobians(self._gc_model, self._gc_data, q)
+        self._gc_pin.updateFramePlacements(self._gc_model, self._gc_data)
+        jacobian = self._gc_pin.getFrameJacobian(
+            self._gc_model,
+            self._gc_data,
+            self._gc_ee_frame_id,
+            self._gc_pin.ReferenceFrame.WORLD,
+        )
+        spatial_velocity = jacobian @ qd
+        linear_speed = float(np.linalg.norm(spatial_velocity[:3]))
+        angular_speed = float(np.linalg.norm(spatial_velocity[3:]))
+
+        if linear_speed > _GC_VEL_THRESHOLD or angular_speed > _GC_W_VEL_THRESHOLD:
+            self._gravity_comp_q_target = q.copy()
+            self._gravity_comp_lock_counter = 0
+            self._gravity_comp_integral *= 0.9
+        else:
+            self._gravity_comp_lock_counter += 1
+
+        arm.mit(
+            pos=self._gravity_comp_q_target,
+            vel=np.zeros(arm.num_joints),
+            kp=np.full(arm.num_joints, _GC_KP),
+            kd=np.full(arm.num_joints, _GC_KD),
+            tau=tau_g + self._gravity_comp_integral,
+        )
+
     def current_pose(self):
         from reBotArm_control_py.kinematics import compute_fk
 
         q, _, _ = self.get_joint_state()
         position, rotation, _ = compute_fk(self._endpos_ctrl._model, q)
         return fk_to_pose(position, rotation)
-
-    def motion_active(self) -> bool:
-        return bool(getattr(self._endpos_ctrl, "_moving", False))
-
-    def motion_progress(self) -> float:
-        traj = getattr(self._endpos_ctrl, "_traj", [])
-        if not traj:
-            return 1.0
-        idx = float(getattr(self._endpos_ctrl, "_traj_idx", 0))
-        return max(0.0, min(1.0, idx / float(len(traj))))
-
-    def cancel_motion(self) -> None:
-        self._endpos_ctrl._stop_send.set()
-        self._endpos_ctrl._moving = False
 
     def get_joint_status_codes(self) -> list[int]:
         codes: list[int] = []
@@ -476,9 +595,13 @@ class HardwareManager:
                 wrapped._rebotarm_locked = True
                 setattr(mot, attr, wrapped)
 
-    def _start_pos_vel_loop(self) -> None:
+    def _start_pos_vel_loop(self, target: np.ndarray | None = None) -> None:
         if self.control_loop_active:
             return
+        if target is None:
+            self.hold_current_position()
+        else:
+            self._endpos_ctrl._q_target[:] = np.array(target, dtype=np.float64)
         self._arm.start_control_loop(self._endpos_ctrl._loop_cb)
         self._endpos_ctrl._running = True
 
