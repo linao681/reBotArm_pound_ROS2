@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/ROS2-Humble | Jazzy-blue.svg" alt="ROS2 Humble">
   <img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python 3.10">
-  <img src="https://img.shields.io/badge/Version-v0.1.0-brightgreen.svg" alt="Version v0.1.0">
+  <img src="https://img.shields.io/badge/Version-v0.2.0-brightgreen.svg" alt="Version v0.2.0">
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2022.04+-orange.svg" alt="Ubuntu 22.04+">
   <img src="https://img.shields.io/badge/Hardware-B601--DM-lightgrey.svg" alt="B601-DM">
 </p>
@@ -28,19 +28,21 @@
 
 ## 项目介绍
 
-当前版本：`v0.1.0`
+当前版本：`v0.2.0`
 
 `rebotarm_ros2` 是 reBot Arm B601-DM 机械臂的 ROS2 SDK 工作空间。它将现有的
 `reBotArm_control_py` Python 控制库封装为 ROS2 topic、service 和 action，
 作为二次开发、上层规划、可视化、重力补偿和单电机调试的统一入口。
 
-当前工作空间包含三个 ROS2 包：
+当前工作空间包含五个 ROS2 包：
 
 | 包 | 作用 |
 |---|---|
 | `rebotarm_msgs` | 自定义 msg / srv / action 接口 |
 | `rebotarmcontroller` | 控制节点包，提供 `reBotArmController` 节点 |
 | `rebotarm_bringup` | launch、配置、URDF、RViz 等启动资源 |
+| `rebotarm_moveit_config` | MoveIt 2 配置、SRDF、ros2_control、RViz 配置 |
+| `rebotarm_moveit_demos` | MoveIt 2 应用示例，如抓取放置和矩形轨迹 |
 
 ---
 
@@ -51,10 +53,7 @@
 - 支持笛卡尔目标：`MoveToPoseIK` service、`MoveToPose` action
 - 支持标准轨迹接口：`control_msgs/action/FollowJointTrajectory`
 - 支持夹爪控制：`SetGripper` service、`GripperCommand` action
-- 支持 controller 内部重力补偿：`gravity_compensation/start`、`gravity_compensation/stop`
-- 支持 per-joint raw command：`JointMitCmd`、`JointPosVelCmd`、`JointVelCmd`
-- 复用 `reBotArm_control_py` 的 `RobotArm`、`ArmEndPos`、FK/IK 和动力学
-- 机械臂与夹爪共用同一个底层 `Controller` / 串口，避免重复打开 `/dev/ttyACM*`
+- 支持单个关节指令：`JointMitCmd`、`JointPosVelCmd`、`JointVelCmd`
 
 ---
 
@@ -122,7 +121,7 @@ python3 -m pip install --user --index-url https://pypi.org/simple motorbridge
 
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+cd your/path/to/rebotarm_ros2
 mkdir -p third_party
 git clone https://github.com/vectorBH6/reBotArm_control_py.git third_party/reBotArm_control_py
 ```
@@ -130,7 +129,7 @@ git clone https://github.com/vectorBH6/reBotArm_control_py.git third_party/reBot
 ## 构建工作空间
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+cd your/path/to/rebotarm_ros2
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 source install/setup.bash
@@ -177,11 +176,18 @@ rebotarm_ros2/
     │   │   ├── motor_passthrough.py
     │   │   ├── conversions.py
     │   │   └── examples/
-    └── rebotarm_bringup/
-        ├── launch/
+    ├── rebotarm_bringup/
+    │   ├── launch/
+    │   ├── config/
+    │   ├── description/
+    │   └── rviz/
+    ├── rebotarm_moveit_config/
+    │   ├── config/
+    │   └── launch/
+    └── rebotarm_moveit_demos/
         ├── config/
-        ├── description/
-        └── rviz/
+        ├── launch/
+        └── rebotarm_moveit_demos/
 ```
 
 ---
@@ -229,7 +235,7 @@ ros2 run rebotarmcontroller reBotArmController
 先在一个终端启动控制节点：
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+cd your/path/to/rebotarm_ros2
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch rebotarm_bringup bringup.launch.py channel:=/dev/ttyACM0
@@ -238,7 +244,7 @@ ros2 launch rebotarm_bringup bringup.launch.py channel:=/dev/ttyACM0
 然后在另一个终端执行控制命令：
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+cd your/path/to/rebotarm_ros2
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ```
@@ -277,7 +283,7 @@ ros2 service call /rebotarm/disable std_srvs/srv/Trigger
 所有示例都假设已经启动 `reBotArmController`：
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+cd your/path/to/rebotarm_ros2
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch rebotarm_bringup bringup.launch.py channel:=/dev/ttyACM0
@@ -393,11 +399,168 @@ q / quit    退出
 | `arm_namespace` | `rebotarm` | ROS 命名空间前缀 |
 | `frame_id` | `base_link` | 机械臂基座坐标系，预留给 TF、视觉和规划集成 |
 | `ee_frame_id` | `end_link` | 末端坐标系，预留给 TF、视觉和规划集成 |
-| `use_rviz` | `false` | 是否启动 RViz |
+| `use_rviz` | `false` | 是否启动 bringup RViz |
 
 ---
 
-## 排障
+## MoveIt 2
+
+MoveIt 2 是用于机械臂运动规划的框架，这里主要负责逆解、碰撞检测、轨迹规划和轨迹执行，
+并通过独立的 demo 包将应用流程与底层驱动隔离开。
+
+MoveIt 相关内容集中在两个包：
+
+| 包 | 作用 |
+|---|---|
+| `rebotarm_moveit_config` | 机械臂模型、SRDF、运动学、joint limits、controller 和 RViz 配置 |
+| `rebotarm_moveit_demos` | 基于 MoveIt 2 的应用 demo |
+
+MoveIt 环境目前使用 `ros2_control` 的模拟硬件和 `move_group` 进行规划执行，适合在 RViz
+中验证模型、IK、轨迹规划和 demo 流程。接入真实硬件前，请先确认关节方向、限位、速度和夹爪开闭范围。
+
+### MoveIt 环境配置
+
+先确认已经加载 ROS2 环境：
+
+```bash
+source /opt/ros/humble/setup.bash
+```
+
+如果使用 Jazzy，将上面的 `humble` 替换为 `jazzy`。也可以使用当前 shell 中的
+`ROS_DISTRO` 自动安装对应版本：
+
+```bash
+sudo apt update
+sudo apt install -y \
+  ros-${ROS_DISTRO}-moveit \
+  ros-${ROS_DISTRO}-moveit-configs-utils \
+  ros-${ROS_DISTRO}-ros2-control \
+  ros-${ROS_DISTRO}-ros2-controllers \
+  ros-${ROS_DISTRO}-xacro
+```
+
+MoveIt 相关包和 demo 已包含在本工作空间中，安装依赖后重新构建：
+
+```bash
+cd your/path/to/rebotarm_ros2
+colcon build --symlink-install
+source install/setup.bash
+```
+
+验证 MoveIt 包和 demo 入口：
+
+```bash
+ros2 pkg list | grep rebotarm_moveit
+ros2 pkg executables rebotarm_moveit_demos
+```
+
+期望至少能看到：
+
+```text
+rebotarm_moveit_demos draw_square
+rebotarm_moveit_demos pick_place
+```
+
+### 启动 MoveIt 环境
+
+```bash
+cd your/path/to/rebotarm_ros2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch rebotarm_moveit_config demo.launch.py
+```
+
+默认会启动：
+
+- `move_group`
+- `robot_state_publisher`
+- `ros2_control_node`
+- `joint_state_broadcaster`
+- `rebotarm_controller`
+- `gripper_controller`
+- RViz MoveIt MotionPlanning 插件
+
+如果只需要后台 MoveIt 环境，不启动 RViz：
+
+```bash
+ros2 launch rebotarm_moveit_config demo.launch.py use_rviz:=false
+```
+
+### 运行画矩形 demo
+
+先启动 MoveIt 环境，再另开一个终端运行：
+
+```bash
+cd your/path/to/rebotarm_ros2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch rebotarm_moveit_demos draw_square.launch.py
+```
+
+`draw_square` 会控制 `gripper_tcp` 遍历同一平面矩形的四个角点。默认参数在：
+
+```text
+src/rebotarm_moveit_demos/config/draw_square.yaml
+```
+
+常用参数：
+
+| 参数 | 说明 |
+|---|---|
+| `start_point` | demo 开始前复位到的关节位置 |
+| `rectangle_center` | 矩形中心点，坐标系为 `base_link` |
+| `rectangle_width` / `rectangle_height` | 矩形宽高，单位 m |
+| `tcp_rpy` | 末端姿态，默认让夹爪竖直朝下 |
+| `tcp_yaw_offsets` | IK 备选 yaw，用于避免 joint6 大幅绕转 |
+
+### 运行抓取放置 demo
+
+先启动 MoveIt 环境，再另开一个终端运行：
+
+```bash
+cd your/path/to/rebotarm_ros2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch rebotarm_moveit_demos pick_place.launch.py
+```
+
+`pick_place` 的默认流程为：移动到 ready 位、打开夹爪、移动到抓取点、闭合夹爪、attach
+物体、回到 ready 位、移动到关于 `base_link` X 轴对称的放置点、detach 物体并松开夹爪。
+
+默认参数在：
+
+```text
+src/rebotarm_moveit_demos/config/pick_place.yaml
+```
+
+常用参数：
+
+| 参数 | 说明 |
+|---|---|
+| `ready_point` | 抓取前后使用的预备关节位置 |
+| `pick_position` | 物体底面中心位置，坐标系为 `base_link` |
+| `pick_tcp_rpy` / `place_tcp_rpy` | 抓取和放置时的末端姿态 |
+| `object_dimensions` | MoveIt 场景中物体尺寸，单位 m |
+| `open_gripper_position` / `closed_gripper_position` | 夹爪开闭关节位置 |
+| `close_gripper_to_object_width` | 是否按物体宽度计算夹爪闭合位置 |
+
+### MoveIt 配置文件
+
+| 文件 | 说明 |
+|---|---|
+| `rebotarm_moveit_config/config/rebotarm.urdf.xacro` | MoveIt 使用的机器人模型 |
+| `rebotarm_moveit_config/config/rebotarm.srdf` | MoveIt group、end effector、默认状态等语义配置 |
+| `rebotarm_moveit_config/config/kinematics.yaml` | IK solver 配置 |
+| `rebotarm_moveit_config/config/joint_limits.yaml` | MoveIt 规划使用的关节限位 |
+| `rebotarm_moveit_config/config/moveit_controllers.yaml` | MoveIt trajectory execution controller 配置 |
+| `rebotarm_moveit_config/config/ros2_controllers.yaml` | ros2_control controller 配置 |
+| `rebotarm_moveit_config/config/initial_positions.yaml` | ros2_control 模拟硬件初始关节位置 |
+| `rebotarm_moveit_demos/config/draw_square.yaml` | 画矩形 demo 参数 |
+| `rebotarm_moveit_demos/config/pick_place.yaml` | 抓取放置 demo 参数 |
+
+---
+
+## FAQ / 排障
 
 ### 找不到串口
 
