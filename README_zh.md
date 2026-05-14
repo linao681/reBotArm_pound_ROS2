@@ -94,8 +94,6 @@ sudo chmod 666 /dev/ttyACM0
 优先使用 Seeed-Projects 官方仓库：
 
 ```bash
-mkdir -p ~/seeed
-cd ~/seeed
 git clone https://github.com/Seeed-Projects/reBotArmController_ROS2.git rebotarm_ros2
 cd rebotarm_ros2
 ```
@@ -103,8 +101,6 @@ cd rebotarm_ros2
 也可以使用当前开发仓库：
 
 ```bash
-mkdir -p ~/seeed
-cd ~/seeed
 git clone https://github.com/EclipseaHime017/reBotArmController_ROS2.git rebotarm_ros2
 cd rebotarm_ros2
 ```
@@ -121,7 +117,6 @@ python3 -m pip install --user --index-url https://pypi.org/simple motorbridge
 
 
 ```bash
-cd your/path/to/rebotarm_ros2
 mkdir -p third_party
 git clone https://github.com/vectorBH6/reBotArm_control_py.git third_party/reBotArm_control_py
 ```
@@ -129,7 +124,6 @@ git clone https://github.com/vectorBH6/reBotArm_control_py.git third_party/reBot
 ## 构建工作空间
 
 ```bash
-cd your/path/to/rebotarm_ros2
 colcon build --symlink-install
 source install/setup.bash
 ```
@@ -192,6 +186,8 @@ rebotarm_ros2/
 ---
 
 ## 快速启动
+
+在正式开始使用机械臂前请注意： **机械臂的控制器具有较高自由度，启用控制器或者给机械臂上电前务必注意械臂工作空间内无人和障碍物。同时，请严格审查每一次对机械臂的运动控制，避免出现意外。严禁危险操作，造成后果自负。**
 
 ### 启动完整系统
 
@@ -403,6 +399,7 @@ q / quit    退出
 
 MoveIt 2 是用于机械臂运动规划的框架，这里主要负责逆解、碰撞检测、轨迹规划和轨迹执行，
 并通过独立的 demo 包将应用流程与底层驱动隔离开。
+更多内容可参考官方 [MoveIt 2 文档](https://moveit.picknik.ai/main/index.html)。
 
 MoveIt 相关内容集中在两个包：
 
@@ -455,7 +452,7 @@ rebotarm_moveit_demos pick_place
 
 ### 使用 MoveIt
 
-MoveIt 的规划功能需要基于 RViz GUI 或者通过节点调用，可以适用于仿真或真实场景。详情可以参考MoveIt 官方文档。
+MoveIt 的规划功能需要基于 RViz GUI 或者通过节点调用，可以适用于仿真或真实场景。
 
 #### 在仿真环境使用 MoveIt
 
@@ -502,6 +499,8 @@ source install/setup.bash
 ros2 launch rebotarm_moveit_config hardware.launch.py
 ```
 
+再次重申，在真实硬件上运行任何 demo 前，请确保机械臂工作空间内无人和障碍物，先在 RViz 中确认规划路径，并随时准备停止控制器。
+
 ### 运行画矩形 demo
 
 先启动 MoveIt 环境，再另开一个终端运行：
@@ -537,12 +536,6 @@ cd your/path/to/rebotarm_ros2
 source install/setup.bash
 ros2 launch rebotarm_moveit_demos pick_place.launch.py
 ```
-
-硬件环境下会自动复用现有 `/rebotarm/gripper/command` 夹爪 action。
-
-
-`pick_place` 的默认流程为：移动到 ready 位、打开夹爪、移动到抓取点、按物体宽度夹取、attach
-物体、回到 ready 位、移动到关于 `base_link` X 轴对称的放置点、detach 物体并松开夹爪。
 
 默认参数在：
 

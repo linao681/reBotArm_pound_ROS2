@@ -96,8 +96,6 @@ Choose and install the appropriate ROS2 distribution from the
 Preferred upstream repository:
 
 ```bash
-mkdir -p ~/seeed
-cd ~/seeed
 git clone https://github.com/Seeed-Projects/reBotArmController_ROS2.git rebotarm_ros2
 cd rebotarm_ros2
 ```
@@ -105,8 +103,6 @@ cd rebotarm_ros2
 Current development repository:
 
 ```bash
-mkdir -p ~/seeed
-cd ~/seeed
 git clone https://github.com/EclipseaHime017/reBotArmController_ROS2.git rebotarm_ros2
 cd rebotarm_ros2
 ```
@@ -122,7 +118,6 @@ python3 -m pip install --user --index-url https://pypi.org/simple motorbridge
 ### Step 4. Clone the low-level SDK
 
 ```bash
-cd your/path/to/rebotarm_ros2
 mkdir -p third_party
 git clone https://github.com/vectorBH6/reBotArm_control_py.git third_party/reBotArm_control_py
 ```
@@ -130,7 +125,6 @@ git clone https://github.com/vectorBH6/reBotArm_control_py.git third_party/reBot
 ## Build
 
 ```bash
-cd your/path/to/rebotarm_ros2
 colcon build --symlink-install
 source install/setup.bash
 ```
@@ -186,6 +180,12 @@ rebotarm_ros2/
 ---
 
 ## Quick Start
+
+Before using the robot, note the following: **The arm controller has a high
+degree of freedom. Before enabling the controller or powering the arm, make
+sure the workspace is clear of people and obstacles. Review every motion
+command carefully to avoid accidents. Dangerous operation is strictly
+prohibited; you are responsible for any consequences.**
 
 ### Launch the full system
 
@@ -386,6 +386,7 @@ Common launch parameters:
 MoveIt 2 is the motion planning framework used here for inverse kinematics,
 collision checking, trajectory planning and execution. The demos are separated
 into their own package so application flows stay isolated from the base driver.
+For more details, see the official [MoveIt 2 Documentation](https://moveit.picknik.ai/main/index.html).
 
 MoveIt-related content is split into two packages:
 
@@ -394,10 +395,14 @@ MoveIt-related content is split into two packages:
 | `rebotarm_moveit_config` | Robot model, SRDF, kinematics, joint limits, controller and RViz config |
 | `rebotarm_moveit_demos` | Application demos based on MoveIt 2 |
 
-The current MoveIt environment uses simulated hardware through `ros2_control` and
-uses `move_group` for planning and execution. It is intended for validating the
-model, IK, trajectory planning and demo flow in RViz. Before connecting real
-hardware, verify joint directions, limits, velocity limits and gripper range.
+The MoveIt environment uses simulated hardware through `ros2_control` and
+`move_group` for planning and execution. It is intended for validating the
+model, IK, trajectory planning and demo flow in RViz.
+
+This repository also supports real hardware. Before connecting real hardware,
+make sure the arm zero configuration, joint directions, joint limits, velocity
+limits and gripper range are all correct, or keep the default repository
+configuration.
 
 ### MoveIt Environment Setup
 
@@ -437,9 +442,14 @@ rebotarm_moveit_demos draw_square
 rebotarm_moveit_demos pick_place
 ```
 
-### Launch the MoveIt environment
+### Use MoveIt
 
-Simulation environment:
+MoveIt planning can be used through the RViz GUI or through ROS nodes, in both
+simulation and real scenes.
+
+#### Use MoveIt in simulation
+
+MoveIt uses the ros2_control virtual hardware interface for RViz simulation:
 
 ```bash
 cd your/path/to/rebotarm_ros2
@@ -457,14 +467,19 @@ By default this starts:
 - `gripper_controller`
 - RViz with the MoveIt MotionPlanning plugin
 
+RViz opens automatically and loads the robot URDF model. You can control motion
+through the panel on the left side of the GUI.
+
 To run the MoveIt environment without RViz:
 
 ```bash
 ros2 launch rebotarm_moveit_config demo.launch.py use_rviz:=false
 ```
 
-For hardware, start the real controller first, then launch the hardware MoveIt
-environment:
+#### Use MoveIt with reBotArm hardware
+
+For the real robot, first start the controller with the hardware interface
+instead of the virtual controller, then start the hardware MoveIt environment:
 
 ```bash
 ros2 launch rebotarm_bringup driver.launch.py channel:=/dev/ttyACM0
@@ -478,10 +493,9 @@ source install/setup.bash
 ros2 launch rebotarm_moveit_config hardware.launch.py
 ```
 
-The hardware MoveIt launch does not own the `reBotArmController` lifecycle. When
-`reBotArmController` exits, it runs `safe_home`. That flow closes the gripper
-first, then returns the arm to safe home, then disables and disconnects the
-hardware.
+To repeat: before running any demo on real hardware, make sure the workspace is
+clear of people and obstacles, verify the planned path in RViz, and be ready to
+stop the controller at any time.
 
 ### Run the draw-square demo
 
@@ -519,15 +533,6 @@ cd your/path/to/rebotarm_ros2
 source install/setup.bash
 ros2 launch rebotarm_moveit_demos pick_place.launch.py
 ```
-
-In the hardware environment, the demo automatically reuses the existing
-`/rebotarm/gripper/command` gripper action. No extra config file is needed.
-
-
-Default flow: move to ready, open gripper, move to the pick point, grasp to the
-object width,
-attach the object, return to ready, move to the placement point mirrored about
-the `base_link` X axis, detach the object and open the gripper.
 
 Default parameters:
 
