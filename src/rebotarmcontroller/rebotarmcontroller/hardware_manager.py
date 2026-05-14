@@ -175,11 +175,23 @@ class HardwareManager:
         self._enabled = True
         self.init_gripper(str(self._gripper_cfg_path))
 
-    def shutdown(self) -> None:
+    def shutdown(
+        self,
+        safe_home: bool = True,
+        disable_after_safe_home: bool = True,
+    ) -> None:
         if not self._connected:
             return
         try:
             self.stop_gravity_compensation()
+
+            if safe_home:
+                self.start_endpos_control()
+                self._endpos_ctrl.safe_home()
+
+            if disable_after_safe_home:
+                self.disable()
+
             self.disconnect_gripper()
             if self._endpos_ctrl._running:
                 self._endpos_ctrl.end()

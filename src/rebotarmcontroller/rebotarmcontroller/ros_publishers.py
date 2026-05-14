@@ -60,12 +60,6 @@ class JointStatePublisher:
 
         msg = JointState()
         msg.header.stamp = self._node.get_clock().now().to_msg()
-        msg.name = self._hardware.joint_names
-        msg.position = [float(v) for v in pos]
-        msg.velocity = [float(v) for v in vel]
-        msg.effort = [float(v) for v in effort]
-        self._publisher.publish(msg)
-
         status_codes = self._hardware.get_joint_status_codes()
         for i, name in enumerate(self._hardware.joint_names):
             motor_msg = JointMotorState()
@@ -77,8 +71,18 @@ class JointStatePublisher:
             motor_msg.status_code = int(status_codes[i])
             self._joint_state_publishers[name].publish(motor_msg)
 
+        msg.name = self._hardware.joint_names
+        msg.position = [float(v) for v in pos]
+        msg.velocity = [float(v) for v in vel]
+        msg.effort = [float(v) for v in effort]
+
         if self._gripper_state_publisher is not None:
             g_pos, g_vel, g_torque, g_status = self._hardware.get_gripper_state()
+            msg.name.extend(["gripper_joint1", "gripper_joint2"])
+            msg.position.extend([float(g_pos), float(g_pos)])
+            msg.velocity.extend([float(g_vel), float(g_vel)])
+            msg.effort.extend([float(g_torque), float(g_torque)])
+
             gripper_msg = JointMotorState()
             gripper_msg.header = msg.header
             gripper_msg.joint_name = "gripper"
@@ -87,6 +91,8 @@ class JointStatePublisher:
             gripper_msg.torque = float(g_torque)
             gripper_msg.status_code = int(g_status)
             self._gripper_state_publisher.publish(gripper_msg)
+
+        self._publisher.publish(msg)
 
     def publish_status(self) -> None:
         msg = ArmStatus()

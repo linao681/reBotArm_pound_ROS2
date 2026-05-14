@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/ROS2-Humble | Jazzy-blue.svg" alt="ROS2 Humble">
   <img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python 3.10">
-  <img src="https://img.shields.io/badge/Version-v0.2.0-brightgreen.svg" alt="Version v0.2.0">
+  <img src="https://img.shields.io/badge/Version-v0.2.1-brightgreen.svg" alt="Version v0.2.1">
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2022.04+-orange.svg" alt="Ubuntu 22.04+">
   <img src="https://img.shields.io/badge/Hardware-B601--DM-lightgrey.svg" alt="B601-DM">
 </p>
@@ -28,7 +28,7 @@
 
 ## 项目介绍
 
-当前版本：`v0.2.0`
+当前版本：`v0.2.1`
 
 `rebotarm_ros2` 是 reBot Arm B601-DM 机械臂的 ROS2 SDK 工作空间。它将现有的
 `reBotArm_control_py` Python 控制库封装为 ROS2 topic、service 和 action，
@@ -218,7 +218,7 @@ ros2 launch rebotarm_bringup bringup.launch.py use_rviz:=true
 ### 只启动控制节点
 
 ```bash
-ros2 launch rebotarm_bringup driver_only.launch.py
+ros2 launch rebotarm_bringup driver.launch.py
 ```
 
 ### 直接运行控制节点
@@ -463,6 +463,8 @@ rebotarm_moveit_demos pick_place
 
 ### 启动 MoveIt 环境
 
+模拟环境：
+
 ```bash
 cd your/path/to/rebotarm_ros2
 source /opt/ros/humble/setup.bash
@@ -485,6 +487,24 @@ ros2 launch rebotarm_moveit_config demo.launch.py
 ```bash
 ros2 launch rebotarm_moveit_config demo.launch.py use_rviz:=false
 ```
+
+硬件环境需要先启动真实控制器，再启动硬件版 MoveIt：
+
+```bash
+ros2 launch rebotarm_bringup driver.launch.py channel:=/dev/ttyACM0
+```
+
+另开终端：
+
+```bash
+cd your/path/to/rebotarm_ros2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch rebotarm_moveit_config hardware.launch.py
+```
+
+硬件版 MoveIt 不拥有 `reBotArmController` 生命周期；退出 `reBotArmController` 时会自动执行
+`safe_home`，然后 `disable` 并断开硬件。
 
 ### 运行画矩形 demo
 
@@ -523,6 +543,9 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch rebotarm_moveit_demos pick_place.launch.py
 ```
+
+硬件环境下会自动复用现有 `/rebotarm/gripper/command` 夹爪 action。
+
 
 `pick_place` 的默认流程为：移动到 ready 位、打开夹爪、移动到抓取点、闭合夹爪、attach
 物体、回到 ready 位、移动到关于 `base_link` X 轴对称的放置点、detach 物体并松开夹爪。

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import time
-from control_msgs.action import FollowJointTrajectory
+from control_msgs.action import FollowJointTrajectory, GripperCommand
 from geometry_msgs.msg import Point, Pose, PoseStamped, Quaternion
 from moveit_msgs.msg import (
     AllowedCollisionEntry,
@@ -38,10 +38,15 @@ class PickPlace(MoveItDemoBase):
             ApplyPlanningScene,
             "/apply_planning_scene",
         )
-        self._gripper = ActionClient(
+        self._gripper_trajectory = ActionClient(
             self.node,
             FollowJointTrajectory,
             str(self._param("gripper_action_name")),
+        )
+        self._gripper_command = ActionClient(
+            self.node,
+            GripperCommand,
+            str(self._param("hardware_gripper_action_name")),
         )
         self._collision_object_publisher = self.node.create_publisher(
             CollisionObject,
@@ -69,7 +74,7 @@ class PickPlace(MoveItDemoBase):
             return False
         if not self.wait_for_execute_server():
             return False
-        if self.use_gripper and not self._gripper.wait_for_server(timeout_sec=10.0):
+        if self.use_gripper and not self._wait_for_gripper_server():
             self.node.get_logger().error("Gripper action is not available")
             return False
 
@@ -239,12 +244,17 @@ class PickPlace(MoveItDemoBase):
             self.node.get_logger().info(f"gripper disabled, skip {mode}")
             return True
 
-        joint_names = [str(name) for name in self._param("gripper_joint_names")]
         if mode == "open":
             position = float(self._param("open_gripper_position"))
         else:
             position = self._closed_gripper_position()
 
+        if self._gripper_kind == "command":
+            return self._command_gripper_action(mode, position)
+        return self._command_gripper_trajectory(mode, position)
+
+    def _command_gripper_trajectory(self, mode: str, position: float) -> bool:
+        joint_names = [str(name) for name in self._param("gripper_joint_names")]
         duration = float(self._param("gripper_motion_duration"))
         goal = FollowJointTrajectory.Goal(
             trajectory=JointTrajectory(
@@ -261,7 +271,20 @@ class PickPlace(MoveItDemoBase):
         self.node.get_logger().info(
             f"{mode} gripper to {position:.4f} on {joint_names}"
         )
+        return self._send_gripper_goal(goal)
 
+    def _command_gripper_action(self, mode: str, position: float) -> bool:
+        goal = GripperCommand.Goal()
+        goal.command.position = position
+        goal.command.max_effort = float(self._param("gripper_max_effort"))
+
+        self.node.get_logger().info(
+            f"{mode} gripper to {position:.4f} via "
+            f"{self._param('hardware_gripper_action_name')}"
+        )
+        return self._send_gripper_goal(goal)
+
+    def _send_gripper_goal(self, goal) -> bool:
         send_future = self._gripper.send_goal_async(goal)
         if not self.wait(send_future, 5.0):
             self.node.get_logger().error("Timed out sending gripper goal")
@@ -282,11 +305,15 @@ class PickPlace(MoveItDemoBase):
             self.node.get_logger().error("gripper returned an empty result")
             return False
 
-        if action_result.result.error_code != 0:
+        result = action_result.result
+        if hasattr(result, "error_code") and result.error_code != 0:
             self.node.get_logger().error(
-                f"gripper trajectory failed with code {action_result.result.error_code}: "
-                f"{action_result.result.error_string}"
+                f"gripper trajectory failed with code {result.error_code}: "
+                f"{result.error_string}"
             )
+            return False
+        if hasattr(result, "reached_goal") and not result.reached_goal:
+            self.node.get_logger().error("gripper command did not reach goal")
             return False
         return True
 
@@ -531,3 +558,13 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    def _wait_for_gripper_server(self) -> bool:
+        if self._gripper_trajectory.wait_for_server(timeout_sec=1.0):
+            self._gripper = self._gripper_trajectory
+            self._gripper_kind = "trajectory"
+            return True
+        if self._gripper_command.wait_for_server(timeout_sec=10.0):
+            self._gripper = self._gripper_command
+            self._gripper_kind = "command"
+            return True
+        return False

@@ -23,6 +23,7 @@ pick_place:
 
     use_gripper: true
     gripper_action_name: /gripper_controller/follow_joint_trajectory
+    hardware_gripper_action_name: /rebotarm/gripper/command
     gripper_joint_names:
       - gripper_joint1
       - gripper_joint2
@@ -32,6 +33,7 @@ pick_place:
     gripper_width_dimension_index: 1
     gripper_grasp_padding: 0.002
     gripper_motion_duration: 1.0
+    gripper_max_effort: 10.0
 
     object_id: demo_object
     object_frame_id: base_link

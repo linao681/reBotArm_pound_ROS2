@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/ROS2-Humble | Jazzy-blue.svg" alt="ROS2 Humble">
   <img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python 3.10">
-  <img src="https://img.shields.io/badge/Version-v0.2.0-brightgreen.svg" alt="Version v0.2.0">
+  <img src="https://img.shields.io/badge/Version-v0.2.1-brightgreen.svg" alt="Version v0.2.1">
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2022.04+-orange.svg" alt="Ubuntu 22.04+">
   <img src="https://img.shields.io/badge/Hardware-B601--DM-lightgrey.svg" alt="B601-DM">
 </p>
@@ -28,7 +28,7 @@
 
 ## Overview
 
-Current version: `v0.2.0`
+Current version: `v0.2.1`
 
 `rebotarm_ros2` is the ROS2 SDK workspace for the reBot Arm B601-DM. It wraps the
 existing `reBotArm_control_py` Python control library into ROS2 topics, services
@@ -212,7 +212,7 @@ ros2 launch rebotarm_bringup bringup.launch.py use_rviz:=true
 ### Launch only the driver
 
 ```bash
-ros2 launch rebotarm_bringup driver_only.launch.py
+ros2 launch rebotarm_bringup driver.launch.py
 ```
 
 ### Run the controller directly
@@ -449,6 +449,8 @@ rebotarm_moveit_demos pick_place
 
 ### Launch the MoveIt environment
 
+Simulation environment:
+
 ```bash
 cd your/path/to/rebotarm_ros2
 source /opt/ros/humble/setup.bash
@@ -471,6 +473,26 @@ To run the MoveIt environment without RViz:
 ```bash
 ros2 launch rebotarm_moveit_config demo.launch.py use_rviz:=false
 ```
+
+For hardware, start the real controller first, then launch the hardware MoveIt
+environment:
+
+```bash
+ros2 launch rebotarm_bringup driver.launch.py channel:=/dev/ttyACM0
+```
+
+In another terminal:
+
+```bash
+cd your/path/to/rebotarm_ros2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch rebotarm_moveit_config hardware.launch.py
+```
+
+The hardware MoveIt launch does not own the `reBotArmController` lifecycle. When
+`reBotArmController` exits, it runs `safe_home`, then `disable`, then disconnects
+the hardware.
 
 ### Run the draw-square demo
 
@@ -510,6 +532,10 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch rebotarm_moveit_demos pick_place.launch.py
 ```
+
+In the hardware environment, the demo automatically reuses the existing
+`/rebotarm/gripper/command` gripper action. No extra config file is needed.
+
 
 Default flow: move to ready, open gripper, move to the pick point, close gripper,
 attach the object, return to ready, move to the placement point mirrored about
