@@ -46,6 +46,9 @@ class DrawSquare(MoveItDemoBase):
         if not self.wait_for_execute_server():
             return False
 
+        if not self.go_home():
+            return False
+
         current_joints = self._wrap_joints(self._current_joint_values())
         if not self._plan_to_joints("reset", current_joints, self.start_point):
             return False
@@ -213,11 +216,8 @@ class DrawSquare(MoveItDemoBase):
             or plan_response.error_code.val != MoveItErrorCodes.SUCCESS
         ):
             code = plan_response.error_code.val if plan_response is not None else "empty"
-            message = (
-                plan_response.error_code.message if plan_response is not None else ""
-            )
             self.node.get_logger().error(
-                f"MoveIt planning failed with code {code}: {message}"
+                f"MoveIt planning failed with code {code}"
             )
             return False
 

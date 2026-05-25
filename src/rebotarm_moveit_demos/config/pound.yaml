@@ -1,0 +1,46 @@
+pound_beef:
+  ros__parameters:
+    group_name: arm
+    joint_names:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+      - joint6
+    home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    # 关节空间模式: 直接读下面的关节角 (use_cartesian: false)
+    # 笛卡尔模式: 读 strike_xyz / lift_xyz → IK 自动解 (use_cartesian: true)
+    use_cartesian: false
+
+    # 抬起 — 锤子举起
+    lift_joints: [0.0, -0.4, -0.6, 0.0, 0.3, 0.0]
+    # 下砸 — 锤子砸到牛肉
+    strike_joints: [0.0, -0.7, -0.4, 0.0, 0.3, 0.0]
+
+    # 牛肉坐标（笛卡尔模式用，正装 base_link 坐标系）
+    strike_xyz: [0.25, 0.0, 0.15]
+    strike_rpy: [0.0, 1.57, 0.0]
+    lift_xyz: [0.25, 0.0, 0.25]
+    lift_rpy: [0.0, 1.57, 0.0]
+
+    # 节拍 (秒)
+    strike_duration: 0.3             # 下砸快
+    lift_duration: 0.6               # 抬起慢
+    pause_at_bottom: 0.05            # 底部停顿
+    cycle_delay: 0.2                 # 循环间隔
+
+    # 捶几次
+    pound_count: 5
+
+    # 读不到关节角时的兜底值
+    default_joints: [0.0, -0.5, -0.5, 0.0, 0.0, 0.0]
+
+    # IK / 规划参数
+    ik_timeout: 3.0
+    result_timeout: 10.0
+    avoid_collisions: false
+
+    frame_id: base_link
+    tcp_link_name: gripper_tcp

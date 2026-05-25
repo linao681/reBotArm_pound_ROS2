@@ -24,6 +24,9 @@ setup(
         "console_scripts": [
             "pick_place = rebotarm_moveit_demos.pick_place:main",
             "draw_square = rebotarm_moveit_demos.draw_square:main",
+            "pound = rebotarm_moveit_demos.pound:main",
+            "load_controllers = rebotarm_moveit_demos.load_controllers:main",
+            "solve_ik = rebotarm_moveit_demos.solve_ik:main",
         ],
     },
 )

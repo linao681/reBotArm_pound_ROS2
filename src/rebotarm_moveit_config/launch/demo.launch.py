@@ -3,7 +3,7 @@ import signal
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler, TimerAction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown, matches_action
@@ -99,33 +99,15 @@ def generate_launch_description():
         output="screen",
     )
 
-    joint_state_broadcaster_spawner = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=[
-            "joint_state_broadcaster",
-            "--controller-manager",
-            "/controller_manager",
-        ],
-    )
-
-    rebotarm_controller_spawner = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=[
-            "rebotarm_controller",
-            "--controller-manager",
-            "/controller_manager",
-        ],
-    )
-
-    gripper_controller_spawner = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=[
-            "gripper_controller",
-            "--controller-manager",
-            "/controller_manager",
+    controller_loader = TimerAction(
+        period=3.0,
+        actions=[
+            Node(
+                package="rebotarm_moveit_demos",
+                executable="load_controllers",
+                name="load_controllers",
+                output="screen",
+            )
         ],
     )
 
@@ -136,9 +118,7 @@ def generate_launch_description():
             static_tf_node,
             robot_state_publisher_node,
             ros2_control_node,
-            joint_state_broadcaster_spawner,
-            rebotarm_controller_spawner,
-            gripper_controller_spawner,
+            controller_loader,
             move_group_node,
             rviz_node,
             RegisterEventHandler(

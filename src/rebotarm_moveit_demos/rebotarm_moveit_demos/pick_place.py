@@ -78,6 +78,9 @@ class PickPlace(MoveItDemoBase):
             self.node.get_logger().error("Gripper action is not available")
             return False
 
+        if not self.go_home():
+            return False
+
         zero_point = [float(value) for value in self._param("zero_point")]
         ready_point = [float(value) for value in self._param("ready_point")]
         current = self._current_joint_values(zero_point)
@@ -201,8 +204,7 @@ class PickPlace(MoveItDemoBase):
         plan_response = response.motion_plan_response
         if plan_response.error_code.val != MoveItErrorCodes.SUCCESS:
             self.node.get_logger().error(
-                f"MoveIt planning failed with code {plan_response.error_code.val}: "
-                f"{plan_response.error_code.message}"
+                f"MoveIt planning failed with code {plan_response.error_code.val}"
             )
             return False
 
@@ -558,7 +560,7 @@ class PickPlace(MoveItDemoBase):
         return True
 
     def _wait_for_gripper_server(self) -> bool:
-        if self._gripper_trajectory.wait_for_server(timeout_sec=1.0):
+        if self._gripper_trajectory.wait_for_server(timeout_sec=10.0):
             self._gripper = self._gripper_trajectory
             self._gripper_kind = "trajectory"
             return True

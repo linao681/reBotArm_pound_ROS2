@@ -8,6 +8,7 @@ draw_square:
       - joint4
       - joint5
       - joint6
+    home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     wrap_joint_names:
       - joint6
     max_wrap_joint_delta: 3.0
