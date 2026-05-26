@@ -27,6 +27,7 @@ setup(
             "pound = rebotarm_moveit_demos.pound:main",
             "load_controllers = rebotarm_moveit_demos.load_controllers:main",
             "solve_ik = rebotarm_moveit_demos.solve_ik:main",
+            "spawn_beef = rebotarm_moveit_demos.spawn_beef:main",
         ],
     },
 )

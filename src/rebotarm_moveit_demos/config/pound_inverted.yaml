@@ -13,10 +13,10 @@ pound_beef:
     # 笛卡尔模式: 读下面的 xyz+rpy → Pinocchio IK 自动解关节角
     use_cartesian: true
     # 牛肉坐标 (base_link 坐标系) — 改 x,y,z 换位置
-    strike_xyz: [0.512, 0.1, 0.555]
+    strike_xyz: [0.512, 0.05, 0.555]
     strike_rpy: [0.0, -0.2, 0.0]
     # 抬起坐标 (XY 跟牛肉相同, Z 更小=更高)
-    lift_xyz: [0.240, 0.1, 0.05]
+    lift_xyz: [0.240, 0.05, 0.05]
     lift_rpy: [0.0, 0.8, 0.0]
 
     # 关节空间备用 (use_cartesian: false 时直接用)
