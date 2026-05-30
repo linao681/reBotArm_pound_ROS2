@@ -386,7 +386,13 @@ class HardwareManager:
             kp=np.full(self._arm.num_joints, _GC_KP, dtype=np.float64),
             kd=np.full(self._arm.num_joints, _GC_KD, dtype=np.float64),
         )
-        self._arm.fresh()
+        self._arm.mit(
+            pos=self._gravity_comp_q_target,
+            vel=np.zeros_like(self._gravity_comp_q_target),
+            tau=np.zeros_like(self._gravity_comp_q_target),
+            kp=np.full(self._arm.num_joints, _GC_KP, dtype=np.float64),
+            kd=np.full(self._arm.num_joints, _GC_KD, dtype=np.float64),
+        )
         self._gravity_comp_integral = np.zeros_like(self._gravity_comp_q_target)
         self._gravity_comp_lock_counter = 0
         self._gravity_comp_active = True

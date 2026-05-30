@@ -97,8 +97,13 @@ class DemoMoveTo(Node):
     def _make_trajectory(self) -> JointTrajectory:
         assert self._latest_joint_state is not None
 
-        joint_names = list(self._latest_joint_state.name)
-        current = np.array(self._latest_joint_state.position, dtype=np.float64)
+        joint_names = [n for n in self._latest_joint_state.name if not n.startswith("gripper")]
+        current = np.array(
+            [self._latest_joint_state.position[i]
+             for i, n in enumerate(self._latest_joint_state.name)
+             if not n.startswith("gripper")],
+            dtype=np.float64,
+        )
         target = self._resolve_target(current)
 
         trajectory = JointTrajectory()
