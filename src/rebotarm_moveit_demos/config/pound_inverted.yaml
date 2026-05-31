@@ -13,21 +13,21 @@ pound_beef:
     # 笛卡尔模式: 读下面的 xyz+rpy → Pinocchio IK 自动解关节角
     use_cartesian: true
     # 牛肉坐标 (base_link 坐标系) — 改 x,y,z 换位置
-    strike_xyz: [0.512, 0.05, 0.555]
+    strike_xyz: [0.512, 0.0, 0.555]
     strike_rpy: [0.0, -0.2, 0.0]
     # 抬起坐标 (XY 跟牛肉相同, Z 更小=更高)
-    lift_xyz: [0.240, 0.05, 0.05]
+    lift_xyz: [0.240, 0.0, 0.05]
     lift_rpy: [0.0, 0.8, 0.0]
 
-    # 关节空间备用 (use_cartesian: false 时直接用)
-    lift_joints: [-0.0, -0.728, -0.197, 0.269, -0.0, 0.0]
-    strike_joints: [-0.0, -1.601, -1.802, 0.001, -0.0, 0.0]
+    # 关节空间 — 正装小角度安全测试
+    lift_joints: [0.0, -0.2, -0.3, 0.0, 0.0, 0.0]
+    strike_joints: [0.0, -0.4, -0.5, 0.0, 0.0, 0.0]
 
     # 节拍 (秒)
-    strike_duration: 0.3
-    lift_duration: 0.5
-    pause_at_bottom: 0.05
-    cycle_delay: 0.2
+    strike_duration: 0.6
+    lift_duration: 0.8
+    pause_at_bottom: 0.1
+    cycle_delay: 0.3
 
     pound_count: 5
     default_joints: [-0.0, -0.728, -0.197, 0.269, -0.0, 0.0]

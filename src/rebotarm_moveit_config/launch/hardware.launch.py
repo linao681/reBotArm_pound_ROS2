@@ -82,7 +82,7 @@ def generate_launch_description():
         executable="static_transform_publisher",
         name="static_transform_publisher",
         output="log",
-        arguments=["0", "0", "0", "0", "0", "0", "world", "base_link"],
+        arguments=["0", "0", "0.9", "0", "0", "3.14159", "world", "base_link"],
     )
 
     robot_state_publisher_node = Node(
